@@ -1,0 +1,47 @@
+# opsai-platform/docker-compose.yml
+# 整个 AI 后端系统一键启动配置！
+# 在uv虚拟环境里创建的这些文件都会根据这个代码复制到docker里
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:16
+    container_name: opsai-postgresql
+    environment:
+      POSTGRES_DB: opsai
+      POSTGRES_USER: opsai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsai123}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # 数据持久化 数据库数据永久保存
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql  # 自动建表
+    healthcheck:                 # 等 PostgreSQL 真正就绪再启动 backend
+      test: ['CMD-SHELL', 'pg_isready -U opsai'] # 检查 PostgreSQL 是否就绪
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI 后端
+  backend:
+    build: # 从 backend 目录构建 Docker 镜像
+      context: ./backend
+      dockerfile: Dockerfile # 指定 Dockerfile 路径
+    container_name: opsai-backend # 后端服务容器
+    ports:
+      - '8000:8000' # 映射后端服务端口
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - DATABASE_URL=postgresql+asyncpg://opsai:${POSTGRES_PASSWORD:-opsai123}@postgres:5432/opsai
+      - APP_ENV=development
+    depends_on:
+      postgres:
+        condition: service_healthy   # 等 postgres 健康才启动
+    volumes:
+      - ./backend/app:/app/app      # 代码热重载 本地改代码 Docker 里的代码瞬间自动同步 FastAPI 自动重启加载新代码！ 不用重启 Docker，不用重新构建，实时生效！
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:  # 数据持久化"
