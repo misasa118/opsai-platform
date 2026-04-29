@@ -1,0 +1,23 @@
+/* src/app/globals.css 这是整个项目的「全局 CSS」*/
+/* 这是 Tailwind CSS 的必需代码，作用：
+ 初始化基础样式
+加载所有工具类（bg-white、flex、text-sm 等）
+让你在项目里随便用 Tailwind 样式 */
+/* src/app/globals.css */
+@import "tailwindcss";
+
+/* 代码块样式 */
+@reference "tailwindcss";
+
+.prose pre {
+  background-color: #111827;
+  color: #4ade80;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
