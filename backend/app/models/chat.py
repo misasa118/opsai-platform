@@ -62,6 +62,7 @@ class ChatRequest(BaseModel): # 定义一个聊天请求模型，表示前端发
     messages: List[Message] = Field(min_length=1, max_length=50)  # 最多50条历史
     mode: Literal['general', 'sql', 'dba', 'oci'] = 'general' # 模式参数，必须是 'general'（通用）、'sql'（SQL 专家）、'dba'（数据库管理员）或 'oci'（Oracle 云专家）之一，默认为 'general'
     session_id: Optional[str] = Field(default=None, max_length=100) # 可选的会话 ID，用于关联同一用户的多轮对话，如果不提供则默认为 None，使用 Field 来设置字段的验证规则，限制 session_id 的最大长度为 100 字符，确保会话 ID 的合理长度，避免过长的输入
+    use_rag: bool = False
 
     @field_validator('messages') # 定义一个字段验证器，用于检查 messages 字段的值是否符合特定的规则，例如确保消息列表的最后一条消息是用户角色，如果验证失败则抛出一个 ValueError 异常，提示用户输入不合法
     @classmethod # 使用 classmethod 装饰器将这个验证器定义为类方法，这样在验证 messages 字段时就可以访问类级别的属性和方法，例如 Message 模型等

@@ -12,6 +12,7 @@ export interface Message {
   content: string
   isStreaming?: boolean // 是否正在流式生成（前端状态，后端没有）
   createdAt: Date
+  sources?: string[]  // 新增：来源文档列表
 }
 
 // 对应后端 app/models/chat.py 的 ChatRequest 类 ChatRequest 发给后端的请求格式 前端发给后端的格式必须长这样：
@@ -26,6 +27,7 @@ export interface SSEChunk {
   content: string
   done: boolean
   error?: string
+  sources?: string[]  // 来源引用
 }
 
 // 聊天会话（侧边栏用）
@@ -42,4 +44,24 @@ export const CHAT_MODES: Record<ChatMode, { label: string; description: string; 
   sql:     { label: 'SQL 优化', description: 'Oracle SQL 性能分析', icon: '🔍' },
   dba:     { label: 'DBA 专家', description: 'Oracle 数据库管理', icon: '🗄️' },
   oci:     { label: 'OCI 架构', description: 'Oracle Cloud 配置', icon: '☁️' },
+}
+
+// 在 src/types/chat.ts 末尾添加
+
+// SourceReference 来源引用 记录回答来自哪个文件、哪几页
+export interface SourceReference {
+  filename: string
+  pages?: number[]
+}
+
+// UploadStatus 文件上传状态 前端可以根据状态显示不同图标 / 文字。
+export type UploadStatus = 'idle' | 'uploading' | 'processing' | 'ready' | 'error'
+
+// UploadedFile 已上传文件 用来显示知识库文件列表：文件名/状态/切块数量/错误信息
+export interface UploadedFile {
+  fileId: string
+  filename: string
+  status: UploadStatus
+  chunkCount?: number
+  error?: string
 }

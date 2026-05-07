@@ -5,6 +5,8 @@
 import ReactMarkdown from 'react-markdown' // 让 AI 消息支持 代码块、表格、加粗、列表
 import { Message } from '@/types/chat' // 导入types/chat.ts里定义的消息类型
 import { clsx } from 'clsx' // 根据条件拼接 class（Tailwind 必备）
+// 在 MessageBubble.tsx 里引入 SourceCard
+import { SourceCard } from './SourceCard'
 
 // 接收 props 父组件把一条消息传给我，我负责把它画成气泡
 interface Props {
@@ -40,6 +42,9 @@ export function MessageBubble({ message }: Props) {
           </div>
         )}
       </div>
+      {!isUser && message.sources && message.sources.length > 0 && (
+          <SourceCard sources={message.sources} />
+          )}
     </div>
   )
 }

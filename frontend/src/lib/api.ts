@@ -39,67 +39,90 @@ export async function sendMessage(request: ChatRequest): Promise<string> {
   return data.content as string
 }
 
+
+// 在 src/lib/api.ts 末尾添加以下函数
+
+// ── 文件上传
+export async function uploadFile(file: File): Promise<{ fileId: string; filename: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await fetch(`${API_BASE}/api/v1/knowledge/upload`, {
+    method: 'POST',
+    body: formData,
+    // 注意：不要手动设置 Content-Type
+    // 浏览器会自动设置 multipart/form-data 并附带 boundary
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail ?? '上传失败')
+  }
+
+  const data = await response.json()
+  return { fileId: data.file_id, filename: data.filename }
+}
+
+// ── 轮询文件处理状态
+export async function getFileStatus(fileId: string) {
+  const response = await fetch(`${API_BASE}/api/v1/knowledge/status/${fileId}`)
+  if (!response.ok) throw new Error('查询状态失败')
+  return response.json()
+}
+
+// ── 获取知识库文档列表
+export async function listDocuments() {
+  const response = await fetch(`${API_BASE}/api/v1/knowledge/list`)
+  if (!response.ok) throw new Error('获取列表失败')
+  return response.json()
+}
+
 // ── 流式接口（核心） streamMessage AI 流式打字输出
 // onChunk: 每收到一个 token 时的回调
 // onDone:  流结束时的回调
 // onError: 出错时的回调
+// ── 更新 streamMessage：支持 use_rag 参数和 sources 回调 AI 流式对话 + RAG 来源接收
+// 内部做了 4 件事：
+// 向后端发请求
+// 接收 SSE 流式文字（一个字一个字来）
+// 解析来源 sources
+// 把文字和来源交给页面显示
 export async function streamMessage(
-  request: ChatRequest,
-  // 回调通知页面
-  onChunk: (chunk: string) => void, // 来一个字，显示一个字
-  onDone: () => void, // 说完了
-  onError: (error: string) => void, // 报错了
+  request: ChatRequest & { use_rag?: boolean },
+  onChunk: (chunk: string) => void,
+  onDone: (sources?: string[]) => void,  // 更新：onDone 携带来源
+  onError: (error: string) => void,
 ): Promise<void> {
-// 发请求到后端
-  const response = await fetch(`${API_BASE}/api/v1/chat/stream`, {
+  console.log('streamMessage request:', JSON.stringify(request))
+  const response = await fetch(`${API_BASE}/api/v1/chat/stream/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   })
 
-  if (!response.ok) {
-    onError(`API 错误: ${response.status}`)
-    return
-  }
+  if (!response.ok) { onError(`API 错误: ${response.status}`); return }
 
-  // response.body 是 ReadableStream，需要逐块读取 打开 “流”
   const reader = response.body!.getReader()
   const decoder = new TextDecoder('utf-8')
-  // 循环读每一段
+  let collectedSources: string[] = []
+
   try {
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
 
-      // 解码字节数组为字符串 解析 SSE 格式
       const text = decoder.decode(value, { stream: true })
-
-      // 按行分割，每行可能是一条 SSE 消息
       const lines = text.split('\n')
 
       for (const line of lines) {
-        // SSE 消息以 'data: ' 开头
         if (!line.startsWith('data: ')) continue
-
         try {
-          const chunk: SSEChunk = JSON.parse(line.slice(6)) // 去掉 'data: '
-
-          if (chunk.error) {
-            onError(chunk.error)
-            return
-          }
-
-          if (chunk.done) {
-            onDone()
-            return
-          }
-
-          if (chunk.content) {
-            onChunk(chunk.content)
-          }
-        } catch {
-          // 忽略解析失败的行（SSE 格式里空行是正常的）
-        }
+          const chunk: SSEChunk = JSON.parse(line.slice(6))
+          if (chunk.error) { onError(chunk.error); return }
+          if (chunk.sources) { collectedSources = chunk.sources }
+          if (chunk.done) { onDone(collectedSources); return }
+          if (chunk.content) { onChunk(chunk.content) }
+        } catch { /* 忽略解析失败的空行 */ }
       }
     }
   } finally {
