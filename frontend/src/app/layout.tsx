@@ -28,3 +28,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   )
 }
+
+// 在顶部导航栏加一个链接
+import Link from 'next/link'
+
+<Link href='/inspection'
+  className='text-sm text-gray-600 hover:text-blue-600 px-3 py-1'>
+  🔍 巡检
+</Link>

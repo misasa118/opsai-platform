@@ -77,3 +77,6 @@ async def global_exception_handler(request: Request, exc: Exception): # 定义�
 # backend/app/main.py 里追加知识库相关接口
 from app.routers import chat, knowledge
 app.include_router(knowledge.router)
+
+from app.routers import chat, knowledge, inspection
+app.include_router(inspection.router)
