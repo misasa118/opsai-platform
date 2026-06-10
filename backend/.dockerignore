@@ -1,0 +1,12 @@
+# backend/.dockerignore
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+*.egg-info/
+.pytest_cache/
+chroma_db/
+uploads/
+notebooks/
+tests/

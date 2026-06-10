@@ -1,0 +1,76 @@
+# .github/workflows/deploy.yml
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [main]   # 只有 push 到 main 才触发
+  workflow_dispatch:   # 也可以在 GitHub 界面手动触发
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 步骤1：拉取代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 步骤2：登录 Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ── 步骤3：设置 Docker Buildx（支持多平台构建）
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 步骤4：构建并推送后端镜像
+      - name: Build and push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/opsai-backend:latest
+          cache-from: type=gha   # 使用 GitHub Actions 缓存加速构建
+          cache-to: type=gha,mode=max
+
+      # ── 步骤5：构建并推送前端镜像
+      - name: Build and push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/opsai-frontend:latest
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://52.78.78.2.nip.io/
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── 步骤6：SSH 登录 EC2，拉取新镜像并重启
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /opt/opsai
+
+            # 拉取最新镜像
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/opsai-backend:latest
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/opsai-frontend:latest
+
+            # 更新 docker-compose 里的镜像名称
+            export DOCKER_REGISTRY=${{ secrets.DOCKERHUB_USERNAME }}
+            export IMAGE_TAG=latest
+
+            # 重启服务（docker compose 会自动用新镜像替换旧容器）
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+
+            # 清理旧镜像（节省磁盘空间）
+            docker image prune -f
+
+            echo '✅ 部署完成'

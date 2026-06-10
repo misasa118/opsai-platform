@@ -1,47 +1,80 @@
-# opsai-platform/docker-compose.yml
-# 整个 AI 后端系统一键启动配置！
-# 在uv虚拟环境里创建的这些文件都会根据这个代码复制到docker里
+# opsai-platform/docker-compose.prod.yml
 version: '3.8'
 
 services:
-  # PostgreSQL 数据库
+
+  # ── PostgreSQL（不对外暴露端口）
   postgres:
-    image: postgres:16
-    container_name: opsai-postgresql
+    image: postgres:16-alpine
+    container_name: opsai-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: opsai
-      POSTGRES_USER: opsai
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsai123}
-    ports:
-      - '5432:5432'
+      POSTGRES_DB:       opsai
+      POSTGRES_USER:     opsai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data # 数据持久化 数据库数据永久保存
-      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql  # 自动建表
-    healthcheck:                 # 等 PostgreSQL 真正就绪再启动 backend
-      test: ['CMD-SHELL', 'pg_isready -U opsai'] # 检查 PostgreSQL 是否就绪
-      interval: 5s
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+    # 注意：生产环境不暴露 5432 端口！只有内部容器能访问
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U opsai']
+      interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - opsai-network
 
-  # FastAPI 后端
+  # ── 后端 FastAPI
   backend:
-    build: # 从 backend 目录构建 Docker 镜像
-      context: ./backend
-      dockerfile: Dockerfile # 指定 Dockerfile 路径
-    container_name: opsai-backend # 后端服务容器
-    ports:
-      - '8000:8000' # 映射后端服务端口
+    image: ${DOCKER_REGISTRY}/opsai-backend:${IMAGE_TAG:-latest}
+    container_name: opsai-backend
+    restart: unless-stopped
     environment:
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - DATABASE_URL=postgresql+asyncpg://opsai:${POSTGRES_PASSWORD:-opsai123}@postgres:5432/opsai
-      - APP_ENV=development
+      DATABASE_URL:   postgresql+asyncpg://opsai:${POSTGRES_PASSWORD}@postgres:5432/opsai
+      GROQ_API_KEY:   ${GROQ_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      DEBUG:          'false'
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_chroma:/app/chroma_db
     depends_on:
       postgres:
-        condition: service_healthy   # 等 postgres 健康才启动
+        condition: service_healthy
+    networks:
+      - opsai-network
+
+  # ── 前端 Next.js
+  frontend:
+    image: ${DOCKER_REGISTRY}/opsai-frontend:${IMAGE_TAG:-latest}
+    container_name: opsai-frontend
+    restart: unless-stopped
+    networks:
+      - opsai-network
+
+  # ── Nginx 反向代理（唯一对外暴露的服务）
+  nginx:
+    image: nginx:alpine
+    container_name: opsai-nginx
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
     volumes:
-      - ./backend/app:/app/app      # 代码热重载 本地改代码 Docker 里的代码瞬间自动同步 FastAPI 自动重启加载新代码！ 不用重启 Docker，不用重新构建，实时生效！
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/letsencrypt:ro  # HTTPS 证书
+      - nginx_webroot:/var/www/certbot     # Let's Encrypt 验证
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - opsai-network
 
 volumes:
-  postgres_data:  # 数据持久化"
+  postgres_data:
+  backend_uploads:
+  backend_chroma:
+  nginx_webroot:
+
+networks:
+  opsai-network:
+    driver: bridge
