@@ -46,7 +46,7 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/opsai-frontend:latest
           build-args: |
-            NEXT_PUBLIC_API_URL=https://52.78.78.2.nip.io/
+            NEXT_PUBLIC_API_URL=https://52.78.78.2.nip.io
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
