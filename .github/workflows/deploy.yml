@@ -34,7 +34,7 @@ jobs:
           context: ./backend
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/opsai-backend:latest
-          platform: linux/amd64
+          platforms: linux/amd64
           cache-from: type=gha   # 使用 GitHub Actions 缓存加速构建
           cache-to: type=gha,mode=max
 
@@ -47,7 +47,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/opsai-frontend:latest
           build-args: |
             NEXT_PUBLIC_API_URL=https://52.78.78.2.nip.io/
-          platform: linux/amd64
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
